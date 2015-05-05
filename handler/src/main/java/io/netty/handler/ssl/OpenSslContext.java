@@ -17,6 +17,7 @@ package io.netty.handler.ssl;
 
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.util.internal.PlatformDependent;
+import io.netty.util.internal.SystemPropertyUtil;
 import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import org.apache.tomcat.jni.CertificateVerifier;
@@ -54,6 +55,7 @@ public abstract class OpenSslContext extends SslContext {
     private final long aprPool;
     @SuppressWarnings({ "unused", "FieldMayBeFinal" })
     private volatile int aprPoolDestroyed;
+    private volatile boolean rejectRemoteInitiatedRenegation;
     private final List<String> unmodifiableCiphers;
     private final long sessionCacheSize;
     private final long sessionTimeout;
@@ -129,6 +131,14 @@ public abstract class OpenSslContext extends SslContext {
         }
         this.mode = mode;
 
+        if (mode == SSL.SSL_MODE_SERVER) {
+            // To make it easier for users to replace JDK implemention with OpenSsl version we also use
+            // 'jdk.tls.rejectClientInitiatedRenegotiation' to allow disabling client initiated renegotiation.
+            // Java8+ uses this system property as well.
+            // See http://blog.ivanristic.com/2014/03/ssl-tls-improvements-in-java-8.html
+            rejectRemoteInitiatedRenegation =
+                    SystemPropertyUtil.getBoolean("jdk.tls.rejectClientInitiatedRenegotiation", false);
+        }
         final List<String> convertedCiphers;
         if (ciphers == null) {
             convertedCiphers = null;
@@ -280,7 +290,8 @@ public abstract class OpenSslContext extends SslContext {
      */
     @Override
     public final SSLEngine newEngine(ByteBufAllocator alloc) {
-        final OpenSslEngine engine = new OpenSslEngine(ctx, alloc, isClient(), sessionContext(), apn, engineMap);
+        final OpenSslEngine engine = new OpenSslEngine(
+                ctx, alloc, isClient(), sessionContext(), apn, engineMap, rejectRemoteInitiatedRenegation);
         engineMap.add(engine);
         return engine;
     }
@@ -299,6 +310,14 @@ public abstract class OpenSslContext extends SslContext {
     @Deprecated
     public final OpenSslSessionStats stats() {
         return sessionContext().stats();
+    }
+
+    /**
+     * Specify if remote initiated renegation is supported or not. If not supported and the remote side tries
+     * to initiate a renegation a {@link SSLHandshakeException} will be thrown during decoding.
+     */
+    public void setRejectRemoteInitiatedRenegation(boolean rejectRemoteInitiatedRenegation) {
+        this.rejectRemoteInitiatedRenegation = rejectRemoteInitiatedRenegation;
     }
 
     @Override
