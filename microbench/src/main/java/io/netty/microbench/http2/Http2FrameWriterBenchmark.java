@@ -351,7 +351,7 @@ public class Http2FrameWriterBenchmark extends AbstractSharedExecutorMicrobenchm
         private final ByteBufAllocator serverAlloc;
         private final Class<? extends Channel> clientChannelClass;
         private final Class<? extends ServerChannel> serverChannelClass;
-        private final Http2RemoteFlowController remoteFlowController;
+        public final Http2RemoteFlowController remoteFlowController;
         private final Http2LocalFlowController localFlowController;
         private SocketAddress address;
 
